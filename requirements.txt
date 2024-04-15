@@ -1,0 +1,10 @@
+gspread
+pandas
+beautifulsoup4
+llama-index
+openai==1.14.3
+llama-index-vector-stores-pinecone
+pinecone-client>=3.0.0
+python-dotenv
+google-cloud-storage
+gdown
