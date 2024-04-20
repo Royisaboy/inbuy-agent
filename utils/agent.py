@@ -30,7 +30,7 @@ class Actions(chat):
         headers = {
             'Content-Type': 'application/json'
         }
-        response = request("POST", "http://localhost:5000/crawl", headers=headers, data=payload)
+        response = request("POST", "http://localhost:3000/crawl", headers=headers, data=payload)
         return response.json()
 
 

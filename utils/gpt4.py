@@ -21,3 +21,4 @@ class chat:
         )
         latest_message = chat_response.choices[0].message
         return json.loads(latest_message.content)
+    
