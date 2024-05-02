@@ -1,7 +1,7 @@
 import json
 import re
 from requests import request
-from utils.gpt4 import chat
+from utils.gpt4 import Chat
 import smtplib
 import email
 from email.mime.multipart import MIMEMultipart
@@ -9,13 +9,19 @@ from email.mime.text import MIMEText
 import gspread
 from utils.prompt import PromptGeneration
 import pandas as pd
-# import gdown
+import gdown
 import uuid
 from google.cloud import storage
+from google.oauth2 import service_account
+from googleapiclient.discovery import build
+from googleapiclient.errors import HttpError
+from googleapiclient.http import MediaIoBaseDownload
+import io
 
-class Actions(chat):
+class Actions:
     def __init__(self, key):
-        super().__init__(key)
+        self.c = Chat(key)
+        self.p = PromptGeneration()
         self.storage_client = storage.Client.from_service_account_json('gcp_credential.json')
         self.bucket = self.storage_client.bucket("infind")
 
@@ -32,6 +38,7 @@ class Actions(chat):
         }
         response = request("POST", "http://localhost:3000/crawl", headers=headers, data=payload)
         return response.json()
+
 
 
     def extract_email_addresses(self, text):
@@ -110,47 +117,27 @@ class Actions(chat):
             return contact
         else:
             return ""
-        
-    def search_product_link(self, query):
-        try:
+
+    def search_product_links(self, query):
+            # try:
             url = f"https://www.googleapis.com/customsearch/v1?key=AIzaSyD6hSd8BCa-VYtNCyIMFFgIOD93xsl_HEc&cx=84249567808554f8e&q={query}"
             search_reulsts = request("GET", url).json()
-            return search_reulsts["items"][0]["link"]
-        except Exception:
-            return ""
-        
-    def check_recommendations_accuracy(self, description, recommendations):
-        p = PromptGeneration()
-        prompt = p.get_recommendation_accuracy(description, recommendations)
-        product_recommendations = self.get_response(prompt)
-        if "results" in product_recommendations or "products" in product_recommendations:
-            product_recommendations = list(product_recommendations.values())[0]
-        else:
-            product_recommendations = [product_recommendations]
-        return product_recommendations
+            if "items" in search_reulsts:
+                item_count = len(search_reulsts["items"])
+                if item_count > 3:
+                    return [item["link"] for item in search_reulsts["items"][:3]]
+                else:
+                    return [item["link"] for item in search_reulsts["items"]]
+            else:
+                return []
     
-    def fetch_sheet_latest_records(self, gcp_credential_dir):
+    def fetch_sheet_all_records(self, gcp_credential_dir):
         gc = gspread.service_account(filename=gcp_credential_dir)
         sht2 = gc.open_by_url('https://docs.google.com/spreadsheets/d/1EODc6xDvF8vS-R4JH1VleKhxwQlhhhF27fGu9Upd1pg/')
         worksheet = sht2.get_worksheet(0)
-        list_of_dicts = worksheet.get_all_records()
-        with open("data/google_sheet_history.json", "r") as f_in:
-            current_position = json.load(f_in)["current_position"]
-        remaining_list_of_dicts = list_of_dicts[current_position:]
-        
-        modified = []
-        for d in remaining_list_of_dicts:
-            request_id = str(uuid.uuid4())
-            d["request_id"] = request_id
-            modified.append(d)
-            blob = self.bucket.blob(f"inbuy/logs/{request_id}/request.json")
-            blob.upload_from_string(json.dumps(d))
-        new_position = current_position + len(modified)
-        with open("data/google_sheet_history.json", "w") as f_out:
-            json.dump({"current_position": new_position}, f_out)
-        return modified
+        return worksheet.get_all_records()
     
-    def generate_supplier_summary(self, request_id, supplier_name, supplier_contact, product_recommendations_str):
+    def generate_supplier_summary(self, supplier_name, supplier_contact, product_recommendations_str):
         
         if supplier_contact == "":
             rfq_status = "Pending"
@@ -164,16 +151,50 @@ class Actions(chat):
             "product_recommendations": product_recommendations_str,
             "rfq_status": rfq_status
             }
-        blob = self.bucket.blob(f"inbuy/logs/{request_id}/recommendations.json")
-        blob.upload_from_string(json.dumps(supplier_summary))
         return supplier_summary
+
     
-    def prune_scraped_reuslts(self, s):
-        while len(json.dumps(s)) > 32000:
-            if len(s) == 1:
-                first_element = s[0]
-                first_element["html"] = first_element["html"][:32000]
-                s = [first_element]
-            else:
-                s = s[:-1]
-        return s
+    def download_excel_file(self, real_file_id):
+        creds = service_account.Credentials.from_service_account_file('gcp_credential.json')
+
+        try:
+            # create drive api client
+            service = build("drive", "v3", credentials=creds)
+
+            # pylint: disable=maybe-no-member
+            request = service.files().get_media(fileId=real_file_id)
+            file = io.BytesIO()
+            downloader = MediaIoBaseDownload(file, request)
+            done = False
+            while done is False:
+                status, done = downloader.next_chunk()
+                print(f"Download {int(status.progress() * 100)}.")
+            # Use BytesIO to convert bytes to a file-like object that pandas can read
+            data = io.BytesIO(file.getvalue())
+
+            # Read the Excel file from the file-like object
+            return pd.read_excel(data).to_dict("records")
+        except HttpError as error:
+            print(f"An error occurred: {error}")
+            return None
+
+    def sample_search_queries(self, link, part):
+        sample_queries_prompt = self.p.get_search_queries_prompt(part)
+        sample_queries = self.c.get_response(sample_queries_prompt)["search_queries"]
+        sample_queries = [f"site: {link} {q}" for q in sample_queries]
+        return sample_queries
+
+    def get_product_recommendations(self, part, sampled_queries):
+        product_links = []
+        for q in sampled_queries:
+            product_links += self.search_product_links(q)
+        product_contents = []
+        for link in product_links:
+            product_contents += self.scrape_web(link, 1)
+        filter_recommendations_prompt = self.p.filter_recommendations_prompt(part, product_contents)
+        product_recommendations = self.c.get_response(filter_recommendations_prompt)
+        if "results" in product_recommendations or "products" in product_recommendations:
+            product_recommendations = list(product_recommendations.values())[0]
+        else:
+            product_recommendations = [product_recommendations]
+        return product_recommendations

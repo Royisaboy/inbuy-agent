@@ -1,7 +1,7 @@
 from openai import OpenAI
 import json
 
-class chat:
+class Chat:
 
     def __init__(self, key):
         self.client = OpenAI(api_key=key)
