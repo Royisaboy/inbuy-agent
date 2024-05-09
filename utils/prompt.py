@@ -25,8 +25,9 @@ class PromptGeneration:
             "supplierName3": "website3"
         })
         return prompt + json_template
+
     
-    def get_recommendations(self, supplier_dict, product_data):
+    def get_recommendations(self, supplier_dict):
         description = supplier_dict["description"]
         tech_specs = supplier_dict["tech_specs"]
         industry = supplier_dict["industry"]
@@ -34,23 +35,21 @@ class PromptGeneration:
         prompt = f'''
         Based on client requirements: {requirements}
 
-        Find me maximum five product name and its product links from below product JSON data that exactly meet requirements.
-        Product JSON:
-        {product_data}
-
+        Find me maximum five products with product names, short descriptions and product links that exactly meet requirements.
         Structure your results in a VALID JSON FORMAT using below template.
 
         JSON Template:
         '''
         json_template = json.dumps(
                 [
-                {"product_name": "product_name1", "link": "product_link1"},
-                {"product_name": "product_name2", "link": "product_link2"},
-                {"product_name": "product_name3", "link": "product_link3"}
+                {"product_name": "product_name1", "short_description": "short_description1", "link": "product_link1"},
+                {"product_name": "product_name2", "short_description": "short_description1", "link": "product_link2"},
+                {"product_name": "product_name3", "short_description": "short_description1", "link": "product_link3"}
             ]
         )
         return prompt + json_template
-
+    
+    
     def get_recommendation_accuracy(self, supplier_dict, recommendations):
         description = supplier_dict["description"]
         tech_specs = supplier_dict["tech_specs"]
