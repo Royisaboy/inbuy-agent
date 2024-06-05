@@ -4,18 +4,13 @@ from utils.gpt4 import Chat
 import os
 import json
 import pandas as pd
-from dotenv import load_dotenv
 import logging
 import re
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-load_dotenv() 
-key = os.getenv("OPENAI_API_KEY")
-from_email = "inbuy01@outlook.com"
-password = os.getenv("EMAIL_PASSWORD")
-subject = "Your supplier search results are available!"
+key = "[OpenAIKey]"
 
 p = PromptGeneration()
 a = Actions(key)

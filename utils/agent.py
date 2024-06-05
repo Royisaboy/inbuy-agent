@@ -106,7 +106,7 @@ class Actions:
         smtp.quit()
 
     def search_contact(self, query):
-        url = f"https://www.googleapis.com/customsearch/v1?key=AIzaSyD6hSd8BCa-VYtNCyIMFFgIOD93xsl_HEc&cx=84249567808554f8e&q={query}"
+        url = f"https://www.googleapis.com/customsearch/v1?key=[GoogleAPIKey]&cx=84249567808554f8e&q={query}"
         search_reulsts = request("GET", url).json()
         if "items" not in search_reulsts:
             return ""
@@ -120,7 +120,7 @@ class Actions:
 
     def search_product_links(self, query):
             # try:
-            url = f"https://www.googleapis.com/customsearch/v1?key=AIzaSyD6hSd8BCa-VYtNCyIMFFgIOD93xsl_HEc&cx=84249567808554f8e&q={query}"
+            url = f"https://www.googleapis.com/customsearch/v1?key=[GoogleAPIKey]&cx=84249567808554f8e&q={query}"
             search_reulsts = request("GET", url).json()
             if "items" in search_reulsts:
                 item_count = len(search_reulsts["items"])
